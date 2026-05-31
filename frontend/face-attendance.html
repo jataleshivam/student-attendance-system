@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <title>Face Attendance - Student Attendance System</title>
   <link rel="stylesheet" href="/css/style.css">
-  <!-- Load modern, highly maintained face-api.js library -->
+  <!-- Load modern, cross-origin friendly face-api.js library -->
   <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
 </head>
 <body>
@@ -39,13 +39,25 @@
       </header>
 
       <div class="content-area">
+        <!-- Environment Indicator Badge -->
+        <div id="envBadge" style="padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 14px; margin-bottom: 20px; display: inline-flex; align-items: center; gap: 8px;">
+          🔍 Detecting environment...
+        </div>
+
         <div class="form-card">
-          <h3> 🤖 Client-Side Face Recognition Scanner</h3>
-          <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px;">
-            Powered by browser-native Deep Learning (neural networks). Works fully in your web browser both locally and in the cloud!
-          </p>
+          <h3 id="modeTitle"> Face Attendance Scanner</h3>
+          
+          <!-- Mode Selector for Localhost -->
+          <div id="modeSelectorContainer" style="display: none; margin-bottom: 20px; padding: 12px; background: var(--bg-hover); border-radius: 8px; border: 1px solid var(--border-color);">
+            <span style="font-size: 13px; font-weight: 600; display: block; margin-bottom: 8px; color: var(--text-secondary);">Select Scanning Mode:</span>
+            <div style="display: flex; gap: 10px;">
+              <button class="btn" id="selectBrowserBtn" onclick="setMode('browser')" style="flex: 1; padding: 8px; font-size: 13px;">🌐 Browser AI Scanner</button>
+              <button class="btn" id="selectPythonBtn" onclick="setMode('python')" style="flex: 1; padding: 8px; font-size: 13px;">🐍 Local Python OpenCV Window</button>
+            </div>
+          </div>
 
           <div class="face-container" style="display: flex; flex-direction: column; gap: 20px; align-items: center; justify-content: center; padding: 10px; width: 100%;">
+            <!-- Webcam Preview Wrapper -->
             <div class="webcam-wrapper" style="width: 100%; max-width: 500px; aspect-ratio: 4/3; border-radius: var(--radius-lg); overflow: hidden; border: 2px solid var(--border-color); background: #0f172a; box-shadow: var(--shadow-md); position: relative; display: flex; align-items: center; justify-content: center;">
               <video id="webcam" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover;"></video>
               <canvas id="overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; z-index: 5;"></canvas>
@@ -59,23 +71,22 @@
             </div>
             
             <div class="face-controls" style="width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 12px; text-align: center;">
-              <button class="btn btn-success" onclick="toggleScanner()" id="scanBtn" disabled style="width: 100%; padding: 14px 28px; font-size: 16px; font-weight: 600; border-radius: 8px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); transition: all 0.3s ease;">
-                 Loading AI Models...
+              <button class="btn btn-success" onclick="triggerScan()" id="scanBtn" disabled style="width: 100%; padding: 14px 28px; font-size: 16px; font-weight: 600; border-radius: 8px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); transition: all 0.3s ease;">
+                 Loading system...
               </button>
             </div>
 
             <div class="face-log" id="faceLog" style="width: 100%; max-height: 200px; overflow-y: auto; background: #0b0f19; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; font-family: monospace; font-size: 12px; color: #a5f3fc; text-align: left; box-sizing: border-box;">
-              <div style="color: #67e8f9; font-weight: bold; border-bottom: 1px solid #1e293b; padding-bottom: 4px; margin-bottom: 6px;">📋 RECOGNITION LOGS</div>
+              <div style="color: #67e8f9; font-weight: bold; border-bottom: 1px solid #1e293b; padding-bottom: 4px; margin-bottom: 6px;">📋 SYSTEM LOGS</div>
             </div>
           </div>
         </div>
 
         <div class="form-card" style="margin-top:20px">
-          <h3> ℹ️ How it works</h3>
+          <h3> ℹ️ About Your Scanning Modes</h3>
           <div style="color:var(--text-secondary);font-size:14px;line-height:1.8">
-            <p>1. <strong>Zero Cloud Lag</strong>: Facial recognition scans run directly in your browser using neural networks. No cameras or windows open on the remote server.</p>
-            <p>2. <strong>Consensus Guarantee</strong>: The scanner must consistently match a face for <strong>5 consecutive frames</strong> at 85%+ accuracy before marking attendance to prevent any false-positives.</p>
-            <p>3. <strong>Auto-Saving</strong>: Once verified, attendance is pushed securely to the cloud database and logged immediately.</p>
+            <p>1. <strong>🌐 Browser AI Scanner (Works Cloud & Local)</strong>: Uses deep learning right in your browser. Perfect for cloud deployments like Render, and works instantly without local Python configuration.</p>
+            <p>2. <strong>🐍 Local Python OpenCV Window (Only works Locally)</strong>: Launches the traditional local python webcam GUI window directly on your computer desktop. Requires the Node server to be running on <code>localhost</code>.</p>
           </div>
         </div>
       </div>
@@ -107,26 +118,94 @@
 
     let localStream = null;
     let isScannerRunning = false;
+    let currentMode = 'browser'; // 'browser' or 'python'
+    let isLocalhost = false;
+
+    // Browser-native specific variables
     let labeledFaceDescriptors = [];
-    let studentsMap = {}; // Maps lowercase label/name -> Student Object
+    let studentsMap = {};
     let scanInterval = null;
     let stabilityQueue = [];
-    const STABILITY_THRESHOLD = 5; // 5 consecutive stable frames
+    const STABILITY_THRESHOLD = 5;
 
-    // Load AI models and reference dataset on startup
+    // Initialize environment detection on startup
     window.addEventListener('DOMContentLoaded', async () => {
-      try {
-        await startBrowserWebcam();
+      detectEnvironment();
+      await startBrowserWebcam();
+      
+      if (currentMode === 'browser') {
         await initializeFaceAPI();
-      } catch (err) {
-        console.error("Initialization error:", err);
-        addLog("❌ Critical error during initialization: " + err.message);
+      } else {
+        setupPythonModeUI();
       }
     });
 
     window.addEventListener('beforeunload', stopBrowserWebcam);
 
-    // Initialize Webcam stream
+    // Environment detector
+    function detectEnvironment() {
+      const hostname = window.location.hostname;
+      isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+      const badge = document.getElementById('envBadge');
+      
+      if (isLocalhost) {
+        badge.innerHTML = "🏠 Running Locally (Localhost)";
+        badge.style.backgroundColor = "rgba(16, 185, 129, 0.15)";
+        badge.style.color = "#10b981";
+        badge.style.border = "1px solid rgba(16, 185, 129, 0.3)";
+        document.getElementById('modeSelectorContainer').style.display = 'block';
+        setMode('browser'); // Default to browser-native but allow toggle
+      } else {
+        badge.innerHTML = "☁️ Running in the Cloud (Render)";
+        badge.style.backgroundColor = "rgba(59, 130, 246, 0.15)";
+        badge.style.color = "#3b82f6";
+        badge.style.border = "1px solid rgba(59, 130, 246, 0.3)";
+        setMode('browser');
+      }
+    }
+
+    // Toggle selected scanning mode
+    function setMode(mode) {
+      currentMode = mode;
+      
+      const browserBtn = document.getElementById('selectBrowserBtn');
+      const pythonBtn = document.getElementById('selectPythonBtn');
+      
+      if (isLocalhost) {
+        browserBtn.className = mode === 'browser' ? 'btn btn-success' : 'btn btn-secondary';
+        pythonBtn.className = mode === 'python' ? 'btn btn-success' : 'btn btn-secondary';
+      }
+
+      if (mode === 'python') {
+        document.getElementById('modeTitle').innerHTML = "🐍 Python OpenCV Desktop Scanner";
+        setupPythonModeUI();
+      } else {
+        document.getElementById('modeTitle').innerHTML = "🌐 Browser-Native AI Scanner";
+        if (labeledFaceDescriptors.length > 0) {
+          setupBrowserModeReadyUI();
+        } else {
+          initializeFaceAPI();
+        }
+      }
+    }
+
+    // Setup Python Mode UI config
+    function setupPythonModeUI() {
+      stopScanner();
+      addLog("💡 Python OpenCV Desktop Scanner selected.");
+      addLog("💡 Click 'Run Face Recognition' to spawn the local camera window on your desktop.");
+      scanBtn.disabled = false;
+      scanBtn.textContent = "Run OpenCV Face Recognition";
+      scanBtn.className = "btn btn-success";
+    }
+
+    function setupBrowserModeReadyUI() {
+      scanBtn.disabled = false;
+      scanBtn.textContent = "Run Browser Face Recognition";
+      scanBtn.className = "btn btn-success";
+    }
+
+    // Capture Local Webcam
     async function startBrowserWebcam() {
       try {
         localStream = await navigator.mediaDevices.getUserMedia({ 
@@ -141,7 +220,7 @@
         }
       } catch (err) {
         console.error("Failed to start browser webcam:", err);
-        addLog("❌ Webcam access failed. Please grant permission in your browser URL bar.");
+        addLog("❌ Webcam blocked. Please allow camera permissions in your browser bar.");
         if (fallback) {
           fallback.innerHTML = `
             <div style="padding: 20px;">
@@ -163,30 +242,34 @@
       if (video) video.srcObject = null;
     }
 
-    // Load face-api models and reference embeddings
+    // Browser Mode: Load weights & compile embeddings
     async function initializeFaceAPI() {
-      addLog("🚀 Initializing browser AI Face Recognition...");
-      addLog("📥 Loading neural network models (this may take a few seconds)...");
+      if (labeledFaceDescriptors.length > 0) return;
 
-      // Load models from public face-api models CDN
-      const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models/';
+      scanBtn.disabled = true;
+      scanBtn.textContent = "Initializing AI Models...";
+      
+      addLog("🚀 Initializing browser AI Face Recognition...");
+      addLog("📥 Loading models from CORS-friendly jsDelivr CDN...");
+
+      // Use jsDelivr weights folder (allows CORS globally)
+      const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights/';
       try {
         await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
         await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
         await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-        addLog("✅ Deep learning models loaded successfully.");
+        addLog("✅ Neural networks loaded successfully.");
       } catch (err) {
-        console.error("Error loading models from primary CDN, retrying fallback...", err);
-        // Fallback CDN in case the main one blocks CORS
-        const FALLBACK_MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
-        await faceapi.nets.ssdMobilenetv1.loadFromUri(FALLBACK_MODEL_URL);
-        await faceapi.nets.faceLandmark68Net.loadFromUri(FALLBACK_MODEL_URL);
-        await faceapi.nets.faceRecognitionNet.loadFromUri(FALLBACK_MODEL_URL);
-        addLog("✅ Fallback models loaded successfully.");
+        console.error("Failed loading from jsDelivr, trying backup...", err);
+        const BACKUP_URL = 'https://justadudewhohacks.github.io/face-api.js/models/';
+        await faceapi.nets.ssdMobilenetv1.loadFromUri(BACKUP_URL);
+        await faceapi.nets.faceLandmark68Net.loadFromUri(BACKUP_URL);
+        await faceapi.nets.faceRecognitionNet.loadFromUri(BACKUP_URL);
+        addLog("✅ Backup models loaded successfully.");
       }
 
       // Fetch registered student profiles
-      addLog("📥 Loading registered student registry from Supabase...");
+      addLog("📥 Syncing student records from database...");
       try {
         const studRes = await authFetch('/api/students/all');
         const studData = await studRes.json();
@@ -196,23 +279,22 @@
           });
         }
       } catch (err) {
-        console.error("Failed to load students mapping:", err);
+        console.error("Failed mapping profiles:", err);
       }
 
       // Fetch references and extract embeddings
-      addLog("🧠 Compiling face descriptors from database...");
+      addLog("🧠 Compiling face embeddings in memory...");
       try {
         const datasetRes = await authFetch('/api/students/dataset');
         const datasetData = await datasetRes.json();
 
         if (datasetData.success && datasetData.data && datasetData.data.length > 0) {
           for (const student of datasetData.data) {
-            addLog(`   Compiling reference descriptors for '${student.label}'...`);
+            addLog(`   Extracting reference features for '${student.label}'...`);
             const descriptors = [];
 
             for (const imgUrl of student.imageUrls) {
               try {
-                // Ensure URLs load correctly (Render host URL relative paths)
                 const img = await faceapi.fetchImage(imgUrl);
                 const detection = await faceapi.detectSingleFace(img)
                   .withFaceLandmarks()
@@ -222,80 +304,118 @@
                   descriptors.push(detection.descriptor);
                 }
               } catch (imgErr) {
-                console.warn(`Failed to process reference image ${imgUrl}:`, imgErr);
+                console.warn(`Failed image ${imgUrl}:`, imgErr);
               }
             }
 
             if (descriptors.length > 0) {
               labeledFaceDescriptors.push(new faceapi.LabeledFaceDescriptors(student.label, descriptors));
-              addLog(`   ✅ Successfully compiled student '${student.label}' (${descriptors.length} references).`);
+              addLog(`   ✅ Successfully compiled '${student.label}' (${descriptors.length} references).`);
             } else {
-              addLog(`   ⚠️ No faces detected in reference images for '${student.label}'.`);
+              addLog(`   ⚠️ No faces detected for '${student.label}' references.`);
             }
           }
         }
       } catch (err) {
         console.error("Failed to load reference dataset:", err);
-        addLog("⚠️ Failed to load database reference embeddings: " + err.message);
+        addLog("⚠️ Reference dataset parsing failed: " + err.message);
       }
 
       if (labeledFaceDescriptors.length > 0) {
-        addLog("⚡ AI face database is ready for real-time verification!");
-        scanBtn.disabled = false;
-        scanBtn.textContent = "Run Face Recognition";
+        addLog("⚡ Browser AI database compile complete!");
+        setupBrowserModeReadyUI();
       } else {
-        addLog("❌ Database contains no student reference pictures. Please add students with images first.");
+        addLog("❌ Database contains no student reference pictures. Add students first.");
         scanBtn.textContent = "Database Empty";
       }
     }
 
-    // Toggle scanning loop
-    function toggleScanner() {
-      if (isScannerRunning) {
-        stopScanner();
+    // Trigger Scan based on selected mode
+    function triggerScan() {
+      if (currentMode === 'python') {
+        triggerPythonScanner();
       } else {
-        startScanner();
+        if (isScannerRunning) {
+          stopScanner();
+        } else {
+          startBrowserScanner();
+        }
       }
     }
 
-    function startScanner() {
+    // --- MODE 1: Python local OpenCV GUI window trigger ---
+    async function triggerPythonScanner() {
+      if (!isLocalhost) {
+        showToast('Python OpenCV GUI scanner can only run on localhost!', 'error');
+        return;
+      }
+
+      scanBtn.disabled = true;
+      scanBtn.textContent = '🎥 Starting OpenCV camera...';
+      scanBtn.className = 'btn btn-danger';
+      
+      addLog('Releasing browser camera handle for Python engine...');
+      stopBrowserWebcam();
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
+      addLog('Executing Python face recognition script locally...');
+      
+      try {
+        const res = await authFetch('/api/attendance/start-face');
+        const data = await res.json();
+        
+        if (data.success) {
+          addLog('✅ Python OpenCV face recognition completed successfully!');
+          showToast('Python face recognition completed!', 'success');
+        } else {
+          addLog('❌ Failed to run Python: ' + (data.message || 'Error occurred'));
+          if (data.error) addLog('Error details: ' + data.error);
+          showToast(data.message || 'Failed to start local Python scanner.', 'error');
+        }
+      } catch (err) {
+        console.error("Connection error:", err);
+        addLog('❌ Local API connection error: ' + err.message);
+        showToast('Local API connection error.', 'error');
+      } finally {
+        addLog('Re-acquiring browser camera preview...');
+        await startBrowserWebcam();
+        scanBtn.disabled = false;
+        scanBtn.textContent = 'Run OpenCV Face Recognition';
+        scanBtn.className = 'btn btn-success';
+      }
+    }
+
+    // --- MODE 2: Browser-Native face-api.js Scanner Loop ---
+    function startBrowserScanner() {
       if (isScannerRunning) return;
       isScannerRunning = true;
       scanBtn.textContent = "🛑 Stop Face Recognition";
       scanBtn.className = "btn btn-danger";
       stabilityQueue = [];
-      addLog("🔍 Started real-time browser scanning...");
+      addLog("🔍 Started local browser scanning stream...");
 
-      // Canvas matches exact dimensions of video feed
       const displaySize = { width: video.videoWidth || 640, height: video.videoHeight || 480 };
       faceapi.matchDimensions(canvas, displaySize);
 
       scanInterval = setInterval(async () => {
-        // Clear previous canvas drawings
         const context = canvas.getContext('2d');
         context.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Detect all faces in current frame
         const detections = await faceapi.detectAllFaces(video)
           .withFaceLandmarks()
           .withFaceDescriptors();
 
         const resizedDetections = faceapi.resizeResults(detections, displaySize);
-
         if (labeledFaceDescriptors.length === 0) return;
         const faceMatcher = new faceapi.FaceMatcher(labeledFaceDescriptors, 0.6);
 
         resizedDetections.forEach((detection, idx) => {
           const bestMatch = faceMatcher.findBestMatch(detection.descriptor);
           const labelName = bestMatch.label;
-          const score = Math.round(bestMatch.distance * 100);
-          
-          // Draw standard bounding box
           const box = detection.detection.box;
           let drawBox;
 
           if (labelName !== 'unknown') {
-            // Identified Student
             const confidence = Math.round((1 - bestMatch.distance) * 100);
             drawBox = new faceapi.draw.DrawBox(box, { 
               label: `${labelName} (${confidence}%)`, 
@@ -303,12 +423,10 @@
             });
             drawBox.draw(canvas);
 
-            // Record predicted name for consensus tracking
-            if (idx === 0) { // Focus on primary face
-              trackConsensus(labelName, confidence);
+            if (idx === 0) {
+              trackBrowserConsensus(labelName, confidence);
             }
           } else {
-            // Unknown Face
             drawBox = new faceapi.draw.DrawBox(box, { 
               label: 'Unknown', 
               boxColor: '#ef4444' 
@@ -316,11 +434,11 @@
             drawBox.draw(canvas);
             
             if (idx === 0) {
-              stabilityQueue = []; // Reset queue if primary face becomes unknown
+              stabilityQueue = [];
             }
           }
         });
-      }, 150); // Scans 7 frames per second for high UI responsiveness
+      }, 150);
     }
 
     function stopScanner() {
@@ -329,40 +447,37 @@
         clearInterval(scanInterval);
         scanInterval = null;
       }
-      scanBtn.textContent = "Run Face Recognition";
-      scanBtn.className = "btn btn-success";
+      if (scanBtn) {
+        scanBtn.textContent = currentMode === 'python' ? "Run OpenCV Face Recognition" : "Run Browser Face Recognition";
+        scanBtn.className = "btn btn-success";
+      }
       
       const context = canvas.getContext('2d');
-      context.clearRect(0, 0, canvas.width, canvas.height);
+      if (context) context.clearRect(0, 0, canvas.width, canvas.height);
       addLog("🛑 Scanner stopped.");
     }
 
-    // Monitor for 5 stable consecutive matches before logging attendance
-    async function trackConsensus(name, confidence) {
-      if (confidence < 80) return; // Strict baseline accuracy of 80%+
+    async function trackBrowserConsensus(name, confidence) {
+      if (confidence < 80) return;
 
       stabilityQueue.push(name);
-      
-      // Keep only last N frames in the buffer
       if (stabilityQueue.length > STABILITY_THRESHOLD) {
         stabilityQueue.shift();
       }
 
-      // Check if queue has reached threshold and has unanimous consensus
       const allMatch = stabilityQueue.length === STABILITY_THRESHOLD && 
                        stabilityQueue.every(val => val === name);
 
       if (allMatch) {
-        stabilityQueue = []; // Reset to prevent duplicates
+        stabilityQueue = [];
         stopScanner();
         
-        addLog(`🧠 Perfect consensus reached for '${name}'! Processing attendance...`);
+        addLog(`🧠 Queue consensus match found for '${name}'! Recording...`);
 
-        // Look up Student ID from name
         const student = studentsMap[name.toLowerCase().trim()];
         if (!student) {
-          addLog(`❌ Failed to mark attendance: Student '${name}' is not in database.`);
-          showToast(`Student '${name}' is not in database.`, 'error');
+          addLog(`❌ Match student mapping fail: '${name}' not found.`);
+          showToast(`Student '${name}' not in registry.`, 'error');
           return;
         }
 
@@ -379,10 +494,10 @@
 
           const result = await response.json();
           if (result.success) {
-            addLog(`✅ SUCCESS: Marked '${student.name}' present in Database.`);
-            showToast(`Marked ${student.name} present successfully!`, 'success');
+            addLog(`✅ SUCCESS: Marked attendance for '${student.name}' in Supabase.`);
+            showToast(`Marked ${student.name} present!`, 'success');
           } else {
-            addLog(`⚠️ Database returned: ${result.message}`);
+            addLog(`⚠️ DB Return: ${result.message}`);
             showToast(result.message, 'warning');
           }
         } catch (err) {
