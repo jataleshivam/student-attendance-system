@@ -6,8 +6,6 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <title>Face Attendance - Student Attendance System</title>
   <link rel="stylesheet" href="/css/style.css">
-  <!-- Load modern, cross-origin friendly face-api.js library -->
-  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
 </head>
 <body>
   <div class="dashboard-layout">
@@ -39,29 +37,13 @@
       </header>
 
       <div class="content-area">
-        <!-- Environment Indicator Badge -->
-        <div id="envBadge" style="padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 14px; margin-bottom: 20px; display: inline-flex; align-items: center; gap: 8px;">
-          🔍 Detecting environment...
-        </div>
-
         <div class="form-card">
-          <h3 id="modeTitle"> Face Attendance Scanner</h3>
+          <h3> Face Recognition Attendance</h3>
           
-          <!-- Mode Selector (ALWAYS visible so user can trigger the python window from the cloud) -->
-          <div id="modeSelectorContainer" style="margin-bottom: 20px; padding: 16px; background: var(--bg-hover); border-radius: 8px; border: 1px solid var(--border-color);">
-            <span style="font-size: 13px; font-weight: 600; display: block; margin-bottom: 8px; color: var(--text-secondary);">Select Scanning Mode:</span>
-            <div style="display: flex; gap: 10px; margin-bottom: 8px;">
-              <button class="btn" id="selectPythonBtn" onclick="setMode('python')" style="flex: 1; padding: 10px; font-size: 13px; font-weight: 600;">🐍 Local Python OpenCV Window (Desktop)</button>
-              <button class="btn" id="selectBrowserBtn" onclick="setMode('browser')" style="flex: 1; padding: 10px; font-size: 13px; font-weight: 600;">🌐 Browser-Native AI Scanner</button>
-            </div>
-            <p id="modeGuideText" style="margin: 4px 0 0 0; font-size: 11px; color: var(--text-muted); line-height: 1.4;"></p>
-          </div>
-
           <div class="face-container" style="display: flex; flex-direction: column; gap: 20px; align-items: center; justify-content: center; padding: 10px; width: 100%;">
             <!-- Webcam Preview Wrapper -->
             <div class="webcam-wrapper" style="width: 100%; max-width: 500px; aspect-ratio: 4/3; border-radius: var(--radius-lg); overflow: hidden; border: 2px solid var(--border-color); background: #0f172a; box-shadow: var(--shadow-md); position: relative; display: flex; align-items: center; justify-content: center;">
               <video id="webcam" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover;"></video>
-              <canvas id="overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; z-index: 5;"></canvas>
               
               <div id="webcamFallback" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 14px; background: #0f172a; text-align: center; padding: 20px; z-index: 10;">
                 <div>
@@ -72,22 +54,24 @@
             </div>
             
             <div class="face-controls" style="width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 12px; text-align: center;">
-              <button class="btn btn-success" onclick="triggerScan()" id="scanBtn" disabled style="width: 100%; padding: 14px 28px; font-size: 16px; font-weight: 600; border-radius: 8px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); transition: all 0.3s ease;">
-                 Loading system...
+              <button class="btn btn-success" onclick="triggerPythonScanner()" id="scanBtn" style="width: 100%; padding: 14px 28px; font-size: 16px; font-weight: 600; border-radius: 8px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); transition: all 0.3s ease;">
+                 Run Face Recognition
               </button>
             </div>
 
             <div class="face-log" id="faceLog" style="width: 100%; max-height: 200px; overflow-y: auto; background: #0b0f19; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; font-family: monospace; font-size: 12px; color: #a5f3fc; text-align: left; box-sizing: border-box;">
-              <div style="color: #67e8f9; font-weight: bold; border-bottom: 1px solid #1e293b; padding-bottom: 4px; margin-bottom: 6px;">📋 SYSTEM LOGS</div>
+              <div style="color: #67e8f9; font-weight: bold; border-bottom: 1px solid #1e293b; padding-bottom: 4px; margin-bottom: 6px;">📋 RECOGNITION LOGS</div>
             </div>
           </div>
         </div>
 
         <div class="form-card" style="margin-top:20px">
-          <h3> ℹ️ About Your Scanning Modes</h3>
+          <h3> ℹ️ Instructions</h3>
           <div style="color:var(--text-secondary);font-size:14px;line-height:1.8">
-            <p>1. <strong>🐍 Local Python OpenCV Window (Teacher Demos)</strong>: Spawns the physical OpenCV camera window directly on your computer's screen. <em>Note: Your local Node server must be active (npm run dev) on your computer for this button to trigger the camera!</em></p>
-            <p>2. <strong>🌐 Browser-Native AI Scanner (Works Everywhere)</strong>: Runs 100% in your internet browser. Ideal for testing directly inside Render on mobile phones or other devices without Python configuration.</p>
+            <p>1. The live webcam stream above shows your browser's real-time camera feed preview.</p>
+            <p>2. Click <strong>"Run Face Recognition"</strong> to launch the high-accuracy face recognition camera scanner.</p>
+            <p>3. The browser stream will automatically release the camera to allow the AI engine full hardware access.</p>
+            <p>4. Once verification is complete or you press <strong>'q'</strong>, the browser's live video stream will automatically resume.</p>
           </div>
         </div>
       </div>
@@ -113,95 +97,20 @@
     initSessionTimeout();
 
     const video = document.getElementById('webcam');
-    const canvas = document.getElementById('overlay');
     const scanBtn = document.getElementById('scanBtn');
     const fallback = document.getElementById('webcamFallback');
 
     let localStream = null;
     let isScannerRunning = false;
-    let currentMode = 'python'; // Default to Python OpenCV scanner as requested by user
-    let isLocalhost = false;
 
-    // Browser-native specific variables
-    let labeledFaceDescriptors = [];
-    let studentsMap = {};
-    let scanInterval = null;
-    let stabilityQueue = [];
-    const STABILITY_THRESHOLD = 5;
-
-    // Initialize environment detection on startup
+    // Start browser webcam preview on page load
     window.addEventListener('DOMContentLoaded', async () => {
-      detectEnvironment();
       await startBrowserWebcam();
-      
-      // Default to Python mode first as requested, but initialize Browser AI in background
-      setMode('python');
-      initializeFaceAPI(); // Lazy load AI weights in background
+      addLog("📷 Live browser webcam preview active.");
+      addLog("💡 Click 'Run Face Recognition' to start scanning.");
     });
 
     window.addEventListener('beforeunload', stopBrowserWebcam);
-
-    // Environment detector
-    function detectEnvironment() {
-      const hostname = window.location.hostname;
-      isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
-      const badge = document.getElementById('envBadge');
-      
-      if (isLocalhost) {
-        badge.innerHTML = "🏠 Running Locally (Localhost)";
-        badge.style.backgroundColor = "rgba(16, 185, 129, 0.15)";
-        badge.style.color = "#10b981";
-        badge.style.border = "1px solid rgba(16, 185, 129, 0.3)";
-      } else {
-        badge.innerHTML = "☁️ Running in the Cloud (Render)";
-        badge.style.backgroundColor = "rgba(59, 130, 246, 0.15)";
-        badge.style.color = "#3b82f6";
-        badge.style.border = "1px solid rgba(59, 130, 246, 0.3)";
-      }
-    }
-
-    // Toggle selected scanning mode
-    function setMode(mode) {
-      currentMode = mode;
-      
-      const browserBtn = document.getElementById('selectBrowserBtn');
-      const pythonBtn = document.getElementById('selectPythonBtn');
-      const guideText = document.getElementById('modeGuideText');
-      
-      browserBtn.className = mode === 'browser' ? 'btn btn-success' : 'btn btn-secondary';
-      pythonBtn.className = mode === 'python' ? 'btn btn-success' : 'btn btn-secondary';
-
-      if (mode === 'python') {
-        document.getElementById('modeTitle').innerHTML = "🐍 Python OpenCV Desktop Scanner";
-        guideText.innerHTML = "💡 Spawns the physical OpenCV camera GUI window on your laptop screen. (Requires your local Node server running at <code>npm run dev</code>).";
-        setupPythonModeUI();
-      } else {
-        document.getElementById('modeTitle').innerHTML = "🌐 Browser-Native AI Scanner";
-        guideText.innerHTML = "💡 Runs face-api.js inside the web browser. Works anywhere, including mobiles, without local Python files.";
-        if (labeledFaceDescriptors.length > 0) {
-          setupBrowserModeReadyUI();
-        } else {
-          scanBtn.disabled = true;
-          scanBtn.textContent = "Loading Browser AI Models...";
-        }
-      }
-    }
-
-    // Setup Python Mode UI config
-    function setupPythonModeUI() {
-      stopScanner();
-      addLog("💡 Python OpenCV Desktop Scanner mode active.");
-      addLog("💡 Make sure your local Node dev server is running in the background.");
-      scanBtn.disabled = false;
-      scanBtn.textContent = "Run OpenCV Face Recognition";
-      scanBtn.className = "btn btn-success";
-    }
-
-    function setupBrowserModeReadyUI() {
-      scanBtn.disabled = false;
-      scanBtn.textContent = "Run Browser Face Recognition";
-      scanBtn.className = "btn btn-success";
-    }
 
     // Capture Local Webcam
     async function startBrowserWebcam() {
@@ -240,119 +149,23 @@
       if (video) video.srcObject = null;
     }
 
-    // Browser Mode: Load weights & compile embeddings
-    async function initializeFaceAPI() {
-      if (labeledFaceDescriptors.length > 0) return;
-
-      addLog("🚀 Initializing browser AI Face Recognition in background...");
-      addLog("📥 Loading models from CORS-friendly jsDelivr CDN...");
-
-      // Use jsDelivr weights folder (allows CORS globally)
-      const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights/';
-      try {
-        await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
-        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
-        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-        addLog("✅ Neural networks loaded successfully.");
-      } catch (err) {
-        console.error("Failed loading from jsDelivr, trying backup...", err);
-        const BACKUP_URL = 'https://justadudewhohacks.github.io/face-api.js/models/';
-        await faceapi.nets.ssdMobilenetv1.loadFromUri(BACKUP_URL);
-        await faceapi.nets.faceLandmark68Net.loadFromUri(BACKUP_URL);
-        await faceapi.nets.faceRecognitionNet.loadFromUri(BACKUP_URL);
-        addLog("✅ Backup models loaded successfully.");
-      }
-
-      // Fetch registered student profiles
-      addLog("📥 Syncing student records from database...");
-      try {
-        const studRes = await authFetch('/api/students/all');
-        const studData = await studRes.json();
-        if (studData.success && studData.data) {
-          studData.data.forEach(student => {
-            studentsMap[student.name.toLowerCase().trim()] = student;
-          });
-        }
-      } catch (err) {
-        console.error("Failed mapping profiles:", err);
-      }
-
-      // Fetch references and extract embeddings
-      addLog("🧠 Compiling face embeddings in memory...");
-      try {
-        const datasetRes = await authFetch('/api/students/dataset');
-        const datasetData = await datasetRes.json();
-
-        if (datasetData.success && datasetData.data && datasetData.data.length > 0) {
-          for (const student of datasetData.data) {
-            addLog(`   Extracting reference features for '${student.label}'...`);
-            const descriptors = [];
-
-            for (const imgUrl of student.imageUrls) {
-              try {
-                const img = await faceapi.fetchImage(imgUrl);
-                const detection = await faceapi.detectSingleFace(img)
-                  .withFaceLandmarks()
-                  .withFaceDescriptor();
-                
-                if (detection) {
-                  descriptors.push(detection.descriptor);
-                }
-              } catch (imgErr) {
-                console.warn(`Failed image ${imgUrl}:`, imgErr);
-              }
-            }
-
-            if (descriptors.length > 0) {
-              labeledFaceDescriptors.push(new faceapi.LabeledFaceDescriptors(student.label, descriptors));
-              addLog(`   ✅ Successfully compiled '${student.label}' (${descriptors.length} references).`);
-            } else {
-              addLog(`   ⚠️ No faces detected for '${student.label}' references.`);
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Failed to load reference dataset:", err);
-        addLog("⚠️ Reference dataset parsing failed: " + err.message);
-      }
-
-      if (labeledFaceDescriptors.length > 0) {
-        addLog("⚡ Browser AI database compile complete!");
-        if (currentMode === 'browser') {
-          setupBrowserModeReadyUI();
-        }
-      } else {
-        addLog("❌ Database contains no student reference pictures. Add students first.");
-      }
-    }
-
-    // Trigger Scan based on selected mode
-    function triggerScan() {
-      if (currentMode === 'python') {
-        triggerPythonScanner();
-      } else {
-        if (isScannerRunning) {
-          stopScanner();
-        } else {
-          startBrowserScanner();
-        }
-      }
-    }
-
-    // --- MODE 1: Python local OpenCV GUI window trigger ---
+    // Trigger Python OpenCV Scanner (Runs local OpenCV camera window)
     async function triggerPythonScanner() {
+      if (isScannerRunning) return;
+      isScannerRunning = true;
+
       scanBtn.disabled = true;
-      scanBtn.textContent = '🎥 Starting OpenCV camera...';
+      scanBtn.textContent = '🎥 Starting face recognition...';
       scanBtn.className = 'btn btn-danger';
       
-      addLog('Releasing browser camera handle to allow Python direct access...');
+      addLog('Releasing browser camera handle to allow scanner direct access...');
       stopBrowserWebcam();
       
       await new Promise(resolve => setTimeout(resolve, 600));
-      addLog('Triggering Python OpenCV script locally on your desktop...');
+      addLog('Triggering high-accuracy face recognition script...');
       
       try {
-        // ALWAYS route this request to localhost:3000 so it can trigger the physical python camera on your computer
+        // Routes to localhost:3000 where the local python OpenCV window is launched
         const localApiUrl = 'http://localhost:3000/api/attendance/start-face';
         const token = sessionStorage.getItem('token');
         
@@ -362,147 +175,25 @@
         const data = await res.json();
         
         if (data.success) {
-          addLog('✅ Python OpenCV face recognition completed successfully!');
-          showToast('Python face recognition completed!', 'success');
+          addLog('✅ Face recognition completed successfully!');
+          showToast('Face recognition completed!', 'success');
         } else {
-          addLog('❌ Failed to run Python: ' + (data.message || 'Error occurred'));
+          addLog('❌ Failed to run face recognition: ' + (data.message || 'Error occurred'));
           if (data.error) addLog('Error details: ' + data.error);
-          showToast(data.message || 'Failed to start local Python scanner.', 'error');
+          showToast(data.message || 'Failed to start face recognition.', 'error');
         }
       } catch (err) {
         console.error("Connection error:", err);
-        addLog('❌ Local Connection Error: Could not connect to localhost:3000.');
-        addLog('💡 Make sure your local Node dev server is running on your computer! (Run "npm run dev")');
-        showToast('Could not connect to local Node server. Please make sure it is running in your terminal.', 'error');
+        addLog('❌ Error: Could not connect to local recognition engine.');
+        addLog('💡 Make sure your local Node server is running on your computer! (Run "npm run dev")');
+        showToast('Could not connect to local server. Make sure it is running in your terminal.', 'error');
       } finally {
         addLog('Re-acquiring browser camera preview...');
         await startBrowserWebcam();
         scanBtn.disabled = false;
-        scanBtn.textContent = 'Run OpenCV Face Recognition';
+        scanBtn.textContent = 'Run Face Recognition';
         scanBtn.className = 'btn btn-success';
-      }
-    }
-
-    // --- MODE 2: Browser-Native face-api.js Scanner Loop ---
-    function startBrowserScanner() {
-      if (isScannerRunning) return;
-      isScannerRunning = true;
-      scanBtn.textContent = "🛑 Stop Face Recognition";
-      scanBtn.className = "btn btn-danger";
-      stabilityQueue = [];
-      addLog("🔍 Started local browser scanning stream...");
-
-      const displaySize = { width: video.videoWidth || 640, height: video.videoHeight || 480 };
-      faceapi.matchDimensions(canvas, displaySize);
-
-      scanInterval = setInterval(async () => {
-        const context = canvas.getContext('2d');
-        context.clearRect(0, 0, canvas.width, canvas.height);
-
-        const detections = await faceapi.detectAllFaces(video)
-          .withFaceLandmarks()
-          .withFaceDescriptors();
-
-        const resizedDetections = faceapi.resizeResults(detections, displaySize);
-        if (labeledFaceDescriptors.length === 0) return;
-        const faceMatcher = new faceapi.FaceMatcher(labeledFaceDescriptors, 0.6);
-
-        resizedDetections.forEach((detection, idx) => {
-          const bestMatch = faceMatcher.findBestMatch(detection.descriptor);
-          const labelName = bestMatch.label;
-          const box = detection.detection.box;
-          let drawBox;
-
-          if (labelName !== 'unknown') {
-            const confidence = Math.round((1 - bestMatch.distance) * 100);
-            drawBox = new faceapi.draw.DrawBox(box, { 
-              label: `${labelName} (${confidence}%)`, 
-              boxColor: '#10b981' 
-            });
-            drawBox.draw(canvas);
-
-            if (idx === 0) {
-              trackBrowserConsensus(labelName, confidence);
-            }
-          } else {
-            drawBox = new faceapi.draw.DrawBox(box, { 
-              label: 'Unknown', 
-              boxColor: '#ef4444' 
-            });
-            drawBox.draw(canvas);
-            
-            if (idx === 0) {
-              stabilityQueue = [];
-            }
-          }
-        });
-      }, 150);
-    }
-
-    function stopScanner() {
-      isScannerRunning = false;
-      if (scanInterval) {
-        clearInterval(scanInterval);
-        scanInterval = null;
-      }
-      if (scanBtn) {
-        scanBtn.textContent = currentMode === 'python' ? "Run OpenCV Face Recognition" : "Run Browser Face Recognition";
-        scanBtn.className = "btn btn-success";
-      }
-      
-      const context = canvas.getContext('2d');
-      if (context) context.clearRect(0, 0, canvas.width, canvas.height);
-      addLog("🛑 Scanner stopped.");
-    }
-
-    async function trackBrowserConsensus(name, confidence) {
-      if (confidence < 80) return;
-
-      stabilityQueue.push(name);
-      if (stabilityQueue.length > STABILITY_THRESHOLD) {
-        stabilityQueue.shift();
-      }
-
-      const allMatch = stabilityQueue.length === STABILITY_THRESHOLD && 
-                       stabilityQueue.every(val => val === name);
-
-      if (allMatch) {
-        stabilityQueue = [];
-        stopScanner();
-        
-        addLog(`🧠 Queue consensus match found for '${name}'! Recording...`);
-
-        const student = studentsMap[name.toLowerCase().trim()];
-        if (!student) {
-          addLog(`❌ Match student mapping fail: '${name}' not found.`);
-          showToast(`Student '${name}' not in registry.`, 'error');
-          return;
-        }
-
-        try {
-          const dateStr = new Date().toISOString().split('T')[0];
-          const response = await authFetch('/api/attendance/face', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              student_id: student.id,
-              date: dateStr
-            })
-          });
-
-          const result = await response.json();
-          if (result.success) {
-            addLog(`✅ SUCCESS: Marked attendance for '${student.name}' in Supabase.`);
-            showToast(`Marked ${student.name} present!`, 'success');
-          } else {
-            addLog(`⚠️ DB Return: ${result.message}`);
-            showToast(result.message, 'warning');
-          }
-        } catch (err) {
-          console.error("Failed to post attendance:", err);
-          addLog("❌ API network connection error: " + err.message);
-          showToast("Network error posting attendance.", "error");
-        }
+        isScannerRunning = false;
       }
     }
 
