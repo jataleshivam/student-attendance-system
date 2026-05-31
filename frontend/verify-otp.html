@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>Verify Email - Student Attendance System</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="auth-container">
+    <div class="auth-box">
+      <div class="auth-header">
+        <h2>Verify Your Email</h2>
+        <p>Enter the 6-digit OTP sent to your email</p>
+        <p style="color:var(--accent-primary);font-size:13px;margin-top:8px" id="emailDisplay"></p>
+      </div>
+
+      <div id="message" class="message"></div>
+
+      <form id="verifyForm">
+        <div class="otp-inputs" id="otpInputs">
+          <input type="text" class="otp-input" maxlength="1" inputmode="numeric" required>
+          <input type="text" class="otp-input" maxlength="1" inputmode="numeric" required>
+          <input type="text" class="otp-input" maxlength="1" inputmode="numeric" required>
+          <input type="text" class="otp-input" maxlength="1" inputmode="numeric" required>
+          <input type="text" class="otp-input" maxlength="1" inputmode="numeric" required>
+          <input type="text" class="otp-input" maxlength="1" inputmode="numeric" required>
+        </div>
+
+        <button type="submit" class="btn" id="verifyBtn">Verify OTP</button>
+
+        <div class="resend-otp">
+          Didn't receive code? <button type="button" id="resendBtn" onclick="resendOTP()">Resend OTP</button>
+        </div>
+      </form>
+
+      <div class="auth-footer">
+        <p><a href="/signup.html">← Back to Signup</a></p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/script.js"></script>
+  <script>
+    const email = sessionStorage.getItem('pendingEmail');
+    if (!email) window.location.href = '/signup.html';
+    document.getElementById('emailDisplay').textContent = email;
+
+    setupOTPInputs('otpInputs');
+
+    document.getElementById('verifyForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const otp = getOTPValue('otpInputs');
+      const btn = document.getElementById('verifyBtn');
+      const msg = document.getElementById('message');
+
+      if (otp.length !== 6) {
+        showMessage(msg, 'Please enter the complete 6-digit OTP.', 'error');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Verifying...';
+
+      try {
+        const res = await fetch('/api/auth/verify-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, otp })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          showMessage(msg, data.message, 'success');
+          sessionStorage.removeItem('pendingEmail');
+          setTimeout(() => window.location.replace('/login.html'), 1500);
+        } else {
+          showMessage(msg, data.message, 'error');
+        }
+      } catch (err) {
+        showMessage(msg, 'Connection error.', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Verify OTP';
+      }
+    });
+
+    async function resendOTP() {
+      const btn = document.getElementById('resendBtn');
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+      try {
+        const res = await fetch('/api/auth/resend-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, purpose: 'signup' })
+        });
+        const data = await res.json();
+        showMessage(document.getElementById('message'), data.message, data.success ? 'success' : 'error');
+      } catch (err) {
+        showMessage(document.getElementById('message'), 'Failed to resend.', 'error');
+      }
+      setTimeout(() => { btn.disabled = false; btn.textContent = 'Resend OTP'; }, 30000);
+    }
+  </script>
+</body>
+</html>

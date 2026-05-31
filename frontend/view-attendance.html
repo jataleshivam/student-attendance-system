@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>View Attendance - Student Attendance System</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="dashboard-layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-text"><h3>Attendance</h3><p>Admin Panel</p></div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="/dashboard.html" class="nav-item">Dashboard</a>
+        <a href="/add-student.html" class="nav-item">Add Student</a>
+        <a href="/view-students.html" class="nav-item">View Students</a>
+        <div class="nav-divider"></div>
+        <a href="/mark-attendance.html" class="nav-item">Manual Attendance</a>
+        <a href="/face-attendance.html" class="nav-item">Face Attendance</a>
+        <a href="/view-attendance.html" class="nav-item active">View Attendance</a>
+      </nav>
+      <div class="sidebar-footer">
+        <a href="#" class="nav-item logout" onclick="logout()">Logout</a>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="main-header">
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+          <div class="header-title"><h2>View Attendance</h2><p>Attendance records and reports</p></div>
+        </div>
+        <div class="header-user"><div class="user-avatar" id="userAvatar">A</div></div>
+      </header>
+
+      <div class="content-area">
+        <div class="table-container">
+          <div class="table-header">
+            <h3>Attendance Records</h3>
+            <div class="filter-bar">
+              <input type="date" id="filterDate" onchange="filterByDate()">
+              <button class="btn-small btn-secondary btn" onclick="clearFilter()">Clear Filter</button>
+            </div>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr><th>#</th><th>Student Name</th><th>Roll Number</th><th>Department</th><th>Date</th><th>Status</th></tr>
+              </thead>
+              <tbody id="attendanceTableBody">
+                <tr><td colspan="6"><div class="empty-state"><h3>Loading...</h3></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/script.js"></script>
+  <script>
+    requireAuth();
+    initSessionTimeout();
+    loadAttendance();
+
+    async function loadAttendance(date) {
+      try {
+        const url = date ? '/api/attendance/date/' + date : '/api/attendance/all';
+        const res = await authFetch(url);
+        const data = await res.json();
+        renderTable(data.data || []);
+      } catch (err) { console.error(err); }
+    }
+
+    function renderTable(records) {
+      const tbody = document.getElementById('attendanceTableBody');
+      if (records.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><h3>No records found</h3><p>No attendance data for the selected criteria</p></div></td></tr>';
+        return;
+      }
+      tbody.innerHTML = records.map((r, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${r.students ? r.students.name : '-'}</td>
+          <td><strong>${r.students ? r.students.roll_no : '-'}</strong></td>
+          <td>${r.students ? r.students.department : '-'}</td>
+          <td>${new Date(r.date).toLocaleDateString('en-IN')}</td>
+          <td><span class="status-badge ${r.status.toLowerCase()}">${r.status}</span></td>
+        </tr>
+      `).join('');
+    }
+
+    function filterByDate() {
+      const date = document.getElementById('filterDate').value;
+      if (date) loadAttendance(date);
+    }
+
+    function clearFilter() {
+      document.getElementById('filterDate').value = '';
+      loadAttendance();
+    }
+  </script>
+</body>
+</html>

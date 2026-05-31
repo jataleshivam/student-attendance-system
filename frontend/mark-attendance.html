@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>Mark Attendance - Student Attendance System</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="dashboard-layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-text"><h3>Attendance</h3><p>Admin Panel</p></div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="/dashboard.html" class="nav-item">Dashboard</a>
+        <a href="/add-student.html" class="nav-item">Add Student</a>
+        <a href="/view-students.html" class="nav-item">View Students</a>
+        <div class="nav-divider"></div>
+        <a href="/mark-attendance.html" class="nav-item active">Manual Attendance</a>
+        <a href="/face-attendance.html" class="nav-item">Face Attendance</a>
+        <a href="/view-attendance.html" class="nav-item">View Attendance</a>
+      </nav>
+      <div class="sidebar-footer">
+        <a href="#" class="nav-item logout" onclick="logout()">Logout</a>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="main-header">
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+          <div class="header-title"><h2>Manual Attendance</h2><p>Mark attendance for students</p></div>
+        </div>
+        <div class="header-user"><div class="user-avatar" id="userAvatar">A</div></div>
+      </header>
+
+      <div class="content-area">
+        <div class="form-card" style="margin-bottom:20px">
+          <div class="form-row" style="align-items:end">
+            <div class="form-group" style="margin-bottom:0">
+              <label for="attendanceDate">Select Date</label>
+              <input type="date" id="attendanceDate">
+            </div>
+            <div>
+              <button class="btn btn-success" id="saveBtn" onclick="saveAttendance()" style="width:auto;padding:12px 30px" disabled>
+                 Save Attendance
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <div class="table-header">
+            <h3>Student List</h3>
+            <div style="display:flex;gap:8px">
+              <button class="btn-small btn" onclick="markAll('Present')">All Present</button>
+              <button class="btn-small btn btn-danger" onclick="markAll('Absent')">All Absent</button>
+            </div>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr><th>#</th><th>Name</th><th>Roll No</th><th>Department</th><th>Status</th></tr>
+              </thead>
+              <tbody id="attendanceTableBody">
+                <tr><td colspan="5"><div class="empty-state"><h3>Loading students...</h3></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/script.js"></script>
+  <script>
+    requireAuth();
+    initSessionTimeout();
+
+    // Set today's date and prevent future dates
+    const todayStr = new Date().toISOString().split('T')[0];
+    const dateInput = document.getElementById('attendanceDate');
+    dateInput.value = todayStr;
+    dateInput.max = todayStr;
+
+    let students = [];
+    let attendanceRecords = [];
+
+    async function loadData() {
+      try {
+        const date = dateInput.value;
+        const tbody = document.getElementById('attendanceTableBody');
+        tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><h3>Loading data...</h3></div></td></tr>';
+        
+        // Fetch both students and today's attendance in parallel
+        const [studentsRes, attendanceRes] = await Promise.all([
+          authFetch('/api/students/all'),
+          authFetch(`/api/attendance/date/${date}`)
+        ]);
+        
+        const studentsData = await studentsRes.json();
+        const attendanceData = await attendanceRes.json();
+        
+        students = studentsData.data || [];
+        attendanceRecords = attendanceData.data || [];
+        
+        renderAttendanceTable();
+      } catch (err) {
+        console.error('Error loading attendance data:', err);
+        showToast('Error loading attendance data.', 'error');
+      }
+    }
+
+    // Load data initially
+    loadData();
+
+    // Reload when the date selection changes
+    dateInput.addEventListener('change', loadData);
+
+    function renderAttendanceTable() {
+      const tbody = document.getElementById('attendanceTableBody');
+      if (students.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><h3>No students found</h3></div></td></tr>';
+        return;
+      }
+      document.getElementById('saveBtn').disabled = false;
+      
+      const selectedDate = dateInput.value;
+      const isPastDate = selectedDate < todayStr;
+      
+      tbody.innerHTML = students.map((s, i) => {
+        // Check if student has an existing record for selected date
+        const record = attendanceRecords.find(r => r.student_id === s.id || (r.students && r.students.id === s.id));
+        
+        // Only lock and badge if marked Present via face recognition (record.is_face is true)
+        const isFaceVerified = record && record.status === 'Present' && record.is_face === true;
+        
+        // Lock and badge if record already exists for a past date
+        const isPastLocked = record && isPastDate;
+        
+        const isPresent = record && record.status === 'Present';
+        const isAbsent = record && record.status === 'Absent';
+        
+        // Default to Present if no record exists
+        const activePresentClass = (isPresent || !record) ? 'active-present' : '';
+        const activeAbsentClass = isAbsent ? 'active-absent' : '';
+        
+        // If they already checked in via Face ID or if it's a past record, lock their row
+        const isDisabled = (isFaceVerified || isPastLocked) ? 'disabled' : '';
+        
+        let badge = '';
+        if (isFaceVerified) {
+          badge = `
+            <span style="display:inline-block; margin-left: 8px; font-size: 10px; background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(16, 185, 129, 0.3); font-weight: 600;">
+              ✓ Face Verified
+            </span>
+          `;
+        } else if (isPastLocked) {
+          badge = `
+            <span style="display:inline-block; margin-left: 8px; font-size: 10px; background: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(239, 68, 68, 0.3); font-weight: 600;">
+              Locked
+            </span>
+          `;
+        }
+
+        return `
+          <tr>
+            <td>${i + 1}</td>
+            <td>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span>${s.name}</span>
+                ${badge}
+              </div>
+            </td>
+            <td><strong>${s.roll_no}</strong></td>
+            <td>${s.department}</td>
+            <td>
+              <div class="attendance-toggle">
+                <button class="toggle-btn ${activePresentClass}" data-id="${s.id}" data-status="Present" onclick="toggleStatus(this, '${s.id}')" ${isDisabled}>Present</button>
+                <button class="toggle-btn ${activeAbsentClass}" data-id="${s.id}" data-status="Absent" onclick="toggleStatus(this, '${s.id}')" ${isDisabled}>Absent</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function toggleStatus(btn, studentId) {
+      const row = btn.closest('.attendance-toggle');
+      row.querySelectorAll('.toggle-btn').forEach(b => {
+        b.classList.remove('active-present', 'active-absent');
+      });
+      const status = btn.dataset.status;
+      btn.classList.add(status === 'Present' ? 'active-present' : 'active-absent');
+    }
+
+    function markAll(status) {
+      document.querySelectorAll('.attendance-toggle').forEach(row => {
+        // Skip disabled rows (e.g. face-verified or past locked students)
+        const firstBtn = row.querySelector('.toggle-btn');
+        if (firstBtn && firstBtn.disabled) return;
+
+        row.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active-present', 'active-absent'));
+        const btn = row.querySelector(`[data-status="${status}"]`);
+        if (btn) btn.classList.add(status === 'Present' ? 'active-present' : 'active-absent');
+      });
+    }
+
+    async function saveAttendance() {
+      const date = document.getElementById('attendanceDate').value;
+      if (!date) { showToast('Please select a date.', 'error'); return; }
+
+      // Check if there are any editable students on the page
+      const editableRows = Array.from(document.querySelectorAll('.attendance-toggle')).filter(row => {
+        const firstBtn = row.querySelector('.toggle-btn');
+        return !(firstBtn && firstBtn.disabled);
+      });
+
+      if (editableRows.length === 0) {
+        showToast('All students are already face-verified or locked for this date.', 'info');
+        return;
+      }
+
+      const attendance = [];
+      document.querySelectorAll('.attendance-toggle').forEach(row => {
+        // Skip disabled rows (face-verified) to prevent re-upserting them and causing DB collisions
+        const firstBtn = row.querySelector('.toggle-btn');
+        if (firstBtn && firstBtn.disabled) return;
+
+        const activeBtn = row.querySelector('.active-present, .active-absent');
+        if (activeBtn) {
+          attendance.push({
+            student_id: activeBtn.dataset.id,
+            status: activeBtn.dataset.status
+          });
+        }
+      });
+
+      if (attendance.length === 0) { showToast('Please select attendance status for at least one student.', 'error'); return; }
+
+      const btn = document.getElementById('saveBtn');
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+
+      try {
+        const res = await authFetch('/api/attendance/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date, attendance })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message, 'success');
+          // Reload the data to reflect newly saved attendance
+          await loadData();
+        } else {
+          showToast(data.message, 'error');
+        }
+      } catch (err) {
+        showToast('Error saving attendance.', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = ' Save Attendance';
+      }
+    }
+  </script>
+</body>
+</html>

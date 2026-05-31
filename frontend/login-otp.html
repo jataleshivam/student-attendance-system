@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>Login Verification - Student Attendance System</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="auth-container">
+    <div class="auth-box">
+      <div class="auth-header">
+        <h2>Two-Factor Authentication</h2>
+        <p>Enter the OTP sent to your email to complete login</p>
+        <p style="color:var(--accent-primary);font-size:13px;margin-top:8px" id="emailDisplay"></p>
+      </div>
+
+      <div id="message" class="message"></div>
+
+      <form id="loginOtpForm">
+        <div class="otp-inputs" id="otpInputs">
+          <input type="text" class="otp-input" maxlength="1" inputmode="numeric" required>
+          <input type="text" class="otp-input" maxlength="1" inputmode="numeric" required>
+          <input type="text" class="otp-input" maxlength="1" inputmode="numeric" required>
+          <input type="text" class="otp-input" maxlength="1" inputmode="numeric" required>
+          <input type="text" class="otp-input" maxlength="1" inputmode="numeric" required>
+          <input type="text" class="otp-input" maxlength="1" inputmode="numeric" required>
+        </div>
+
+        <button type="submit" class="btn" id="verifyBtn">Verify & Login</button>
+
+        <div class="resend-otp">
+          Didn't receive code? <button type="button" id="resendBtn" onclick="resendLoginOTP()">Resend OTP</button>
+        </div>
+      </form>
+
+      <div class="auth-footer">
+        <p><a href="/login.html">← Back to Login</a></p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/script.js"></script>
+  <script>
+    const email = sessionStorage.getItem('pendingEmail');
+    if (!email) window.location.replace('/login.html');
+    document.getElementById('emailDisplay').textContent = email;
+
+    setupOTPInputs('otpInputs');
+
+    document.getElementById('loginOtpForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const otp = getOTPValue('otpInputs');
+      const btn = document.getElementById('verifyBtn');
+      const msg = document.getElementById('message');
+
+      if (otp.length !== 6) {
+        showMessage(msg, 'Please enter the complete 6-digit OTP.', 'error');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Verifying...';
+
+      try {
+        const res = await fetch('/api/auth/login-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, otp })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          sessionStorage.setItem('token', data.token);
+          sessionStorage.setItem('user', JSON.stringify(data.user));
+          sessionStorage.removeItem('pendingEmail');
+          showMessage(msg, ' Login successful! Redirecting...', 'success');
+          setTimeout(() => window.location.replace('/dashboard.html'), 1000);
+        } else {
+          showMessage(msg, data.message, 'error');
+        }
+      } catch (err) {
+        showMessage(msg, 'Connection error.', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Verify & Login';
+      }
+    });
+
+    async function resendLoginOTP() {
+      const btn = document.getElementById('resendBtn');
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+      try {
+        const res = await fetch('/api/auth/resend-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, purpose: 'login' })
+        });
+        const data = await res.json();
+        showMessage(document.getElementById('message'), data.message, data.success ? 'success' : 'error');
+      } catch (err) {
+        showMessage(document.getElementById('message'), 'Failed to resend.', 'error');
+      }
+      setTimeout(() => { btn.disabled = false; btn.textContent = 'Resend OTP'; }, 30000);
+    }
+  </script>
+</body>
+</html>

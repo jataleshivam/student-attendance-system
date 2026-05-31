@@ -1,0 +1,7 @@
+# Python dependencies for face recognition
+face_recognition
+opencv-python
+scikit-learn
+joblib
+numpy
+requests

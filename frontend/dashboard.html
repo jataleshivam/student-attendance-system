@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Dashboard - Student Attendance System</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+  <div class="dashboard-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-text">
+          <h3>Attendance</h3>
+          <p>Admin Panel</p>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="/dashboard.html" class="nav-item active">
+          Dashboard
+        </a>
+        <a href="/add-student.html" class="nav-item">
+          Add Student
+        </a>
+        <a href="/view-students.html" class="nav-item">
+          View Students
+        </a>
+        <div class="nav-divider"></div>
+        <a href="/mark-attendance.html" class="nav-item">
+          Manual Attendance
+        </a>
+        <a href="/face-attendance.html" class="nav-item">
+          Face Attendance
+        </a>
+        <a href="/view-attendance.html" class="nav-item">
+          View Attendance
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="#" class="nav-item logout" onclick="logout()">
+          Logout
+        </a>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <header class="main-header">
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+          <div class="header-title">
+            <h2>Dashboard</h2>
+            <p>Welcome back, <span id="adminName">Admin</span></p>
+          </div>
+        </div>
+        <div class="header-user">
+          <div class="user-info" style="text-align:right">
+            <span id="headerUsername">Admin</span>
+            <p id="headerEmail">admin@gmail.com</p>
+          </div>
+          <div class="user-avatar" id="userAvatar">A</div>
+        </div>
+      </header>
+
+      <div class="content-area">
+        <div class="summary-cards">
+          <div class="summary-card">
+            <h3 id="totalStudents">0</h3>
+            <p>Total Students</p>
+          </div>
+          <div class="summary-card">
+            <h3 id="todayPresent">0</h3>
+            <p>Present Today</p>
+          </div>
+          <div class="summary-card">
+            <h3 id="todayDate">-</h3>
+            <p>Today's Date</p>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <div class="table-header">
+            <h3>Quick Actions</h3>
+          </div>
+          <div style="padding:24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+            <a href="/add-student.html" class="btn" style="text-align:center;text-decoration:none"> Add Student</a>
+            <a href="/mark-attendance.html" class="btn" style="text-align:center;text-decoration:none"> Mark Attendance</a>
+            <a href="/face-attendance.html" class="btn" style="text-align:center;text-decoration:none"> Face Attendance</a>
+            <a href="/view-attendance.html" class="btn" style="text-align:center;text-decoration:none"> View Reports</a>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/script.js"></script>
+  <script>
+    requireAuth();
+    initSessionTimeout();
+    preventBackNavigation();
+    loadUserInfo();
+
+    // Load dashboard data
+    (async () => {
+      try {
+        const [studentsRes, attendanceRes] = await Promise.all([
+          authFetch('/api/students/all'),
+          authFetch('/api/attendance/today/count')
+        ]);
+        const studentsData = await studentsRes.json();
+        const attendanceData = await attendanceRes.json();
+
+        if (studentsData.success) document.getElementById('totalStudents').textContent = studentsData.count || studentsData.data.length;
+        if (attendanceData.success) document.getElementById('todayPresent').textContent = attendanceData.count;
+      } catch (err) {
+        console.error('Dashboard load error:', err);
+      }
+
+      // Set today's date
+      const today = new Date();
+      document.getElementById('todayDate').textContent = today.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+    })();
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,7 @@
+node_modules/
+.env
+.DS_Store
+*.log
+repo.zip
+temp_unzip/
+.vscode/

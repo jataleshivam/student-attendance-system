@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>Add Student - Student Attendance System</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="dashboard-layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-text"><h3>Attendance</h3><p>Admin Panel</p></div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="/dashboard.html" class="nav-item">Dashboard</a>
+        <a href="/add-student.html" class="nav-item active">Add Student</a>
+        <a href="/view-students.html" class="nav-item">View Students</a>
+        <div class="nav-divider"></div>
+        <a href="/mark-attendance.html" class="nav-item">Manual Attendance</a>
+        <a href="/face-attendance.html" class="nav-item">Face Attendance</a>
+        <a href="/view-attendance.html" class="nav-item">View Attendance</a>
+      </nav>
+      <div class="sidebar-footer">
+        <a href="#" class="nav-item logout" onclick="logout()">Logout</a>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="main-header">
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+          <div class="header-title"><h2>Add Student</h2><p>Register a new student</p></div>
+        </div>
+        <div class="header-user">
+          <div class="user-avatar" id="userAvatar">A</div>
+        </div>
+      </header>
+
+      <div class="content-area">
+        <div class="form-card">
+          <h3>Student Registration Form</h3>
+          <form id="addStudentForm">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="studentName">Student Name</label>
+                <div class="input-wrapper">
+                  <input type="text" id="studentName" placeholder="Full name" required>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="rollNo">Roll Number</label>
+                <div class="input-wrapper">
+                  <input type="text" id="rollNo" placeholder="e.g. CS2024001" required>
+                </div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="department">Department</label>
+                <div class="input-wrapper">
+                  <input type="text" id="department" placeholder="e.g. Computer Science" required>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="studentEmail">Email</label>
+                <div class="input-wrapper">
+                  <input type="email" id="studentEmail" placeholder="student@email.com">
+                </div>
+              </div>
+            </div>
+            <div style="margin-top:10px">
+              <button type="submit" class="btn" id="addBtn" style="max-width:300px"> Add Student</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/script.js"></script>
+  <script>
+    requireAuth();
+    initSessionTimeout();
+
+    document.getElementById('addStudentForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('addBtn');
+      btn.disabled = true;
+      btn.textContent = 'Adding...';
+
+      const body = {
+        name: document.getElementById('studentName').value.trim(),
+        roll_no: document.getElementById('rollNo').value.trim(),
+        department: document.getElementById('department').value.trim(),
+        email: document.getElementById('studentEmail').value.trim()
+      };
+
+      try {
+        const res = await authFetch('/api/students/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message, 'success');
+          e.target.reset();
+        } else {
+          showToast(data.message, 'error');
+        }
+      } catch (err) {
+        showToast('Connection error.', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = ' Add Student';
+      }
+    });
+  </script>
+</body>
+</html>

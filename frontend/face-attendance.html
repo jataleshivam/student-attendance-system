@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>Face Attendance - Student Attendance System</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="dashboard-layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-text"><h3>Attendance</h3><p>Admin Panel</p></div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="/dashboard.html" class="nav-item">Dashboard</a>
+        <a href="/add-student.html" class="nav-item">Add Student</a>
+        <a href="/view-students.html" class="nav-item">View Students</a>
+        <div class="nav-divider"></div>
+        <a href="/mark-attendance.html" class="nav-item">Manual Attendance</a>
+        <a href="/face-attendance.html" class="nav-item active">Face Attendance</a>
+        <a href="/view-attendance.html" class="nav-item">View Attendance</a>
+      </nav>
+      <div class="sidebar-footer">
+        <a href="#" class="nav-item logout" onclick="logout()">Logout</a>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="main-header">
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+          <div class="header-title"><h2>Face Attendance</h2><p>Mark attendance using face recognition</p></div>
+        </div>
+        <div class="header-user"><div class="user-avatar" id="userAvatar">A</div></div>
+      </header>
+
+      <div class="content-area">
+        <div class="form-card">
+          <h3> Face Recognition Attendance</h3>
+          <div class="face-container" style="display: flex; flex-direction: column; gap: 20px; align-items: center; justify-content: center; padding: 30px 10px; width: 100%;">
+            <div class="webcam-wrapper" style="width: 100%; max-width: 480px; aspect-ratio: 4/3; border-radius: var(--radius-lg); overflow: hidden; border: 2px solid var(--border-color); background: #0f172a; box-shadow: var(--shadow-md); position: relative; display: flex; align-items: center; justify-content: center;">
+              <video id="webcam" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
+              <div id="webcamFallback" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 14px; background: #0f172a; text-align: center; padding: 20px; z-index: 10;">
+                <div>
+                  <span style="font-size: 40px; display: block; margin-bottom: 8px; animation: pulse 1.5s infinite;">📷</span>
+                  Initializing live browser webcam preview...
+                </div>
+              </div>
+            </div>
+            
+            <div class="face-controls" style="width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 12px; text-align: center;">
+              <button class="btn btn-success" onclick="triggerFaceRecognition()" id="scanBtn" style="width: 100%; padding: 14px 28px; font-size: 16px; font-weight: 600; border-radius: 8px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); transition: all 0.3s ease;">
+                 Run Face Recognition
+              </button>
+            </div>
+
+            <div class="face-log" id="faceLog" style="width: 100%; margin-top: 10px;">
+              <h4> Recognition Log</h4>
+              <p style="color:var(--text-muted);font-size:13px">Click "Run Face Recognition" to start the high-accuracy OpenCV scanner.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-card" style="margin-top:20px">
+          <h3> Instructions</h3>
+          <div style="color:var(--text-secondary);font-size:14px;line-height:1.8">
+            <p>1. The live webcam stream above shows your browser's real-time camera feed preview.</p>
+            <p>2. Click <strong>"Run Face Recognition"</strong> to launch the high-accuracy OpenCV face recognition camera scanner.</p>
+            <p>3. The browser stream will automatically release the camera to allow the Python AI engine full hardware access.</p>
+            <p>4. Once verification is complete or you press <strong>'q'</strong>, the browser's live video stream will automatically resume.</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <style>
+    @keyframes pulse {
+      0% { opacity: 0.6; transform: scale(0.98); }
+      50% { opacity: 1; transform: scale(1.02); }
+      100% { opacity: 0.6; transform: scale(0.98); }
+    }
+  </style>
+
+  <script src="/js/script.js"></script>
+  <script>
+    requireAuth();
+    initSessionTimeout();
+
+    let localStream = null;
+    let isScannerRunning = false;
+
+    // Start browser webcam preview on page load
+    window.addEventListener('DOMContentLoaded', async () => {
+      await startBrowserWebcam();
+      addLog('📷 Live browser webcam preview active.');
+      addLog('💡 Click "Run Face Recognition" to launch the Python OpenCV scanner.');
+    });
+    window.addEventListener('beforeunload', stopBrowserWebcam);
+
+    async function startBrowserWebcam() {
+      const video = document.getElementById('webcam');
+      const fallback = document.getElementById('webcamFallback');
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ 
+          video: { width: { ideal: 640 }, height: { ideal: 480 } } 
+        });
+        if (video) {
+          video.srcObject = localStream;
+          video.onloadedmetadata = () => {
+            video.play();
+            if (fallback) fallback.style.display = 'none';
+          };
+        }
+      } catch (err) {
+        console.error("Failed to start browser webcam:", err);
+        if (fallback) {
+          fallback.innerHTML = `
+            <div>
+              <span style="font-size: 40px; display: block; margin-bottom: 8px;">⚠️</span>
+              Failed to access camera.<br>
+              <small style="color: var(--text-muted); font-size: 11px;">Make sure permissions are granted and the camera is not used by another application.</small>
+            </div>
+          `;
+          fallback.style.display = 'flex';
+        }
+      }
+    }
+
+    function stopBrowserWebcam() {
+      const video = document.getElementById('webcam');
+      const fallback = document.getElementById('webcamFallback');
+      
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
+      
+      if (video) {
+        video.srcObject = null;
+      }
+      if (fallback) {
+        fallback.style.display = 'flex';
+      }
+    }
+
+    async function triggerFaceRecognition() {
+      const btn = document.getElementById('scanBtn');
+      if (!btn) return;
+      
+      if (isScannerRunning) {
+        showToast('Scanner is already running!', 'warning');
+        return;
+      }
+
+      isScannerRunning = true;
+      btn.disabled = true;
+      btn.textContent = '🎥 Starting OpenCV Scanner...';
+      btn.className = 'btn btn-danger';
+      
+      addLog('Releasing browser camera to start verification scanner...');
+      stopBrowserWebcam();
+      
+      // Give the OS 500ms to fully release the camera resource
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      addLog('Starting Python face recognition script...');
+      
+      try {
+        const res = await authFetch('/api/attendance/start-face');
+        const data = await res.json();
+        
+        if (data.success) {
+          addLog('✅ Face recognition completed successfully!');
+          addLog('Output:\n' + data.output);
+          showToast('Face recognition completed successfully!', 'success');
+        } else {
+          addLog('❌ Failed to start face recognition: ' + (data.message || 'Unknown error'));
+          if (data.error) addLog('Error details: ' + data.error);
+          showToast(data.message || 'Failed to start face recognition.', 'error');
+        }
+      } catch (err) {
+        console.error("Failed to run python recognition:", err);
+        addLog('❌ Connection error to face recognition API: ' + err.message);
+        showToast('Connection error to face recognition service.', 'error');
+      } finally {
+        addLog('Re-acquiring browser camera preview...');
+        await startBrowserWebcam();
+        isScannerRunning = false;
+        btn.disabled = false;
+        btn.textContent = 'Run Face Recognition';
+        btn.className = 'btn btn-success';
+      }
+    }
+
+
+    function addLog(text) {
+      const log = document.getElementById('faceLog');
+      if (!log) return;
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      const time = new Date().toLocaleTimeString();
+      entry.textContent = `[${time}] ${text}`;
+      log.appendChild(entry);
+      log.scrollTop = log.scrollHeight;
+    }
+  </script>
+</body>
+</html>
