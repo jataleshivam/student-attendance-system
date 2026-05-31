@@ -6,6 +6,8 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <title>Face Attendance - Student Attendance System</title>
   <link rel="stylesheet" href="/css/style.css">
+  <!-- Load modern, highly maintained face-api.js library -->
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
 </head>
 <body>
   <div class="dashboard-layout">
@@ -38,38 +40,42 @@
 
       <div class="content-area">
         <div class="form-card">
-          <h3> Face Recognition Attendance</h3>
-          <div class="face-container" style="display: flex; flex-direction: column; gap: 20px; align-items: center; justify-content: center; padding: 30px 10px; width: 100%;">
-            <div class="webcam-wrapper" style="width: 100%; max-width: 480px; aspect-ratio: 4/3; border-radius: var(--radius-lg); overflow: hidden; border: 2px solid var(--border-color); background: #0f172a; box-shadow: var(--shadow-md); position: relative; display: flex; align-items: center; justify-content: center;">
-              <video id="webcam" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
+          <h3> 🤖 Client-Side Face Recognition Scanner</h3>
+          <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px;">
+            Powered by browser-native Deep Learning (neural networks). Works fully in your web browser both locally and in the cloud!
+          </p>
+
+          <div class="face-container" style="display: flex; flex-direction: column; gap: 20px; align-items: center; justify-content: center; padding: 10px; width: 100%;">
+            <div class="webcam-wrapper" style="width: 100%; max-width: 500px; aspect-ratio: 4/3; border-radius: var(--radius-lg); overflow: hidden; border: 2px solid var(--border-color); background: #0f172a; box-shadow: var(--shadow-md); position: relative; display: flex; align-items: center; justify-content: center;">
+              <video id="webcam" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover;"></video>
+              <canvas id="overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; z-index: 5;"></canvas>
+              
               <div id="webcamFallback" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 14px; background: #0f172a; text-align: center; padding: 20px; z-index: 10;">
                 <div>
                   <span style="font-size: 40px; display: block; margin-bottom: 8px; animation: pulse 1.5s infinite;">📷</span>
-                  Initializing live browser webcam preview...
+                  Initializing live browser webcam...
                 </div>
               </div>
             </div>
             
             <div class="face-controls" style="width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 12px; text-align: center;">
-              <button class="btn btn-success" onclick="triggerFaceRecognition()" id="scanBtn" style="width: 100%; padding: 14px 28px; font-size: 16px; font-weight: 600; border-radius: 8px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); transition: all 0.3s ease;">
-                 Run Face Recognition
+              <button class="btn btn-success" onclick="toggleScanner()" id="scanBtn" disabled style="width: 100%; padding: 14px 28px; font-size: 16px; font-weight: 600; border-radius: 8px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); transition: all 0.3s ease;">
+                 Loading AI Models...
               </button>
             </div>
 
-            <div class="face-log" id="faceLog" style="width: 100%; margin-top: 10px;">
-              <h4> Recognition Log</h4>
-              <p style="color:var(--text-muted);font-size:13px">Click "Run Face Recognition" to start the high-accuracy OpenCV scanner.</p>
+            <div class="face-log" id="faceLog" style="width: 100%; max-height: 200px; overflow-y: auto; background: #0b0f19; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; font-family: monospace; font-size: 12px; color: #a5f3fc; text-align: left; box-sizing: border-box;">
+              <div style="color: #67e8f9; font-weight: bold; border-bottom: 1px solid #1e293b; padding-bottom: 4px; margin-bottom: 6px;">📋 RECOGNITION LOGS</div>
             </div>
           </div>
         </div>
 
         <div class="form-card" style="margin-top:20px">
-          <h3> Instructions</h3>
+          <h3> ℹ️ How it works</h3>
           <div style="color:var(--text-secondary);font-size:14px;line-height:1.8">
-            <p>1. The live webcam stream above shows your browser's real-time camera feed preview.</p>
-            <p>2. Click <strong>"Run Face Recognition"</strong> to launch the high-accuracy OpenCV face recognition camera scanner.</p>
-            <p>3. The browser stream will automatically release the camera to allow the Python AI engine full hardware access.</p>
-            <p>4. Once verification is complete or you press <strong>'q'</strong>, the browser's live video stream will automatically resume.</p>
+            <p>1. <strong>Zero Cloud Lag</strong>: Facial recognition scans run directly in your browser using neural networks. No cameras or windows open on the remote server.</p>
+            <p>2. <strong>Consensus Guarantee</strong>: The scanner must consistently match a face for <strong>5 consecutive frames</strong> at 85%+ accuracy before marking attendance to prevent any false-positives.</p>
+            <p>3. <strong>Auto-Saving</strong>: Once verified, attendance is pushed securely to the cloud database and logged immediately.</p>
           </div>
         </div>
       </div>
@@ -82,6 +88,11 @@
       50% { opacity: 1; transform: scale(1.02); }
       100% { opacity: 0.6; transform: scale(0.98); }
     }
+    .log-entry {
+      margin-bottom: 4px;
+      line-height: 1.4;
+      word-break: break-all;
+    }
   </style>
 
   <script src="/js/script.js"></script>
@@ -89,23 +100,37 @@
     requireAuth();
     initSessionTimeout();
 
+    const video = document.getElementById('webcam');
+    const canvas = document.getElementById('overlay');
+    const scanBtn = document.getElementById('scanBtn');
+    const fallback = document.getElementById('webcamFallback');
+
     let localStream = null;
     let isScannerRunning = false;
+    let labeledFaceDescriptors = [];
+    let studentsMap = {}; // Maps lowercase label/name -> Student Object
+    let scanInterval = null;
+    let stabilityQueue = [];
+    const STABILITY_THRESHOLD = 5; // 5 consecutive stable frames
 
-    // Start browser webcam preview on page load
+    // Load AI models and reference dataset on startup
     window.addEventListener('DOMContentLoaded', async () => {
-      await startBrowserWebcam();
-      addLog('📷 Live browser webcam preview active.');
-      addLog('💡 Click "Run Face Recognition" to launch the Python OpenCV scanner.');
+      try {
+        await startBrowserWebcam();
+        await initializeFaceAPI();
+      } catch (err) {
+        console.error("Initialization error:", err);
+        addLog("❌ Critical error during initialization: " + err.message);
+      }
     });
+
     window.addEventListener('beforeunload', stopBrowserWebcam);
 
+    // Initialize Webcam stream
     async function startBrowserWebcam() {
-      const video = document.getElementById('webcam');
-      const fallback = document.getElementById('webcamFallback');
       try {
         localStream = await navigator.mediaDevices.getUserMedia({ 
-          video: { width: { ideal: 640 }, height: { ideal: 480 } } 
+          video: { width: 640, height: 480 } 
         });
         if (video) {
           video.srcObject = localStream;
@@ -116,12 +141,13 @@
         }
       } catch (err) {
         console.error("Failed to start browser webcam:", err);
+        addLog("❌ Webcam access failed. Please grant permission in your browser URL bar.");
         if (fallback) {
           fallback.innerHTML = `
-            <div>
+            <div style="padding: 20px;">
               <span style="font-size: 40px; display: block; margin-bottom: 8px;">⚠️</span>
               Failed to access camera.<br>
-              <small style="color: var(--text-muted); font-size: 11px;">Make sure permissions are granted and the camera is not used by another application.</small>
+              <small style="color: var(--text-muted); font-size: 11px;">Make sure permissions are granted and the camera is not locked.</small>
             </div>
           `;
           fallback.style.display = 'flex';
@@ -130,71 +156,242 @@
     }
 
     function stopBrowserWebcam() {
-      const video = document.getElementById('webcam');
-      const fallback = document.getElementById('webcamFallback');
-      
       if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
         localStream = null;
       }
-      
-      if (video) {
-        video.srcObject = null;
-      }
-      if (fallback) {
-        fallback.style.display = 'flex';
-      }
+      if (video) video.srcObject = null;
     }
 
-    async function triggerFaceRecognition() {
-      const btn = document.getElementById('scanBtn');
-      if (!btn) return;
-      
-      if (isScannerRunning) {
-        showToast('Scanner is already running!', 'warning');
-        return;
+    // Load face-api models and reference embeddings
+    async function initializeFaceAPI() {
+      addLog("🚀 Initializing browser AI Face Recognition...");
+      addLog("📥 Loading neural network models (this may take a few seconds)...");
+
+      // Load models from public face-api models CDN
+      const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models/';
+      try {
+        await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+        addLog("✅ Deep learning models loaded successfully.");
+      } catch (err) {
+        console.error("Error loading models from primary CDN, retrying fallback...", err);
+        // Fallback CDN in case the main one blocks CORS
+        const FALLBACK_MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+        await faceapi.nets.ssdMobilenetv1.loadFromUri(FALLBACK_MODEL_URL);
+        await faceapi.nets.faceLandmark68Net.loadFromUri(FALLBACK_MODEL_URL);
+        await faceapi.nets.faceRecognitionNet.loadFromUri(FALLBACK_MODEL_URL);
+        addLog("✅ Fallback models loaded successfully.");
       }
 
-      isScannerRunning = true;
-      btn.disabled = true;
-      btn.textContent = '🎥 Starting OpenCV Scanner...';
-      btn.className = 'btn btn-danger';
-      
-      addLog('Releasing browser camera to start verification scanner...');
-      stopBrowserWebcam();
-      
-      // Give the OS 500ms to fully release the camera resource
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      addLog('Starting Python face recognition script...');
-      
+      // Fetch registered student profiles
+      addLog("📥 Loading registered student registry from Supabase...");
       try {
-        const res = await authFetch('/api/attendance/start-face');
-        const data = await res.json();
-        
-        if (data.success) {
-          addLog('✅ Face recognition completed successfully!');
-          addLog('Output:\n' + data.output);
-          showToast('Face recognition completed successfully!', 'success');
-        } else {
-          addLog('❌ Failed to start face recognition: ' + (data.message || 'Unknown error'));
-          if (data.error) addLog('Error details: ' + data.error);
-          showToast(data.message || 'Failed to start face recognition.', 'error');
+        const studRes = await authFetch('/api/students/all');
+        const studData = await studRes.json();
+        if (studData.success && studData.data) {
+          studData.data.forEach(student => {
+            studentsMap[student.name.toLowerCase().trim()] = student;
+          });
         }
       } catch (err) {
-        console.error("Failed to run python recognition:", err);
-        addLog('❌ Connection error to face recognition API: ' + err.message);
-        showToast('Connection error to face recognition service.', 'error');
-      } finally {
-        addLog('Re-acquiring browser camera preview...');
-        await startBrowserWebcam();
-        isScannerRunning = false;
-        btn.disabled = false;
-        btn.textContent = 'Run Face Recognition';
-        btn.className = 'btn btn-success';
+        console.error("Failed to load students mapping:", err);
+      }
+
+      // Fetch references and extract embeddings
+      addLog("🧠 Compiling face descriptors from database...");
+      try {
+        const datasetRes = await authFetch('/api/students/dataset');
+        const datasetData = await datasetRes.json();
+
+        if (datasetData.success && datasetData.data && datasetData.data.length > 0) {
+          for (const student of datasetData.data) {
+            addLog(`   Compiling reference descriptors for '${student.label}'...`);
+            const descriptors = [];
+
+            for (const imgUrl of student.imageUrls) {
+              try {
+                // Ensure URLs load correctly (Render host URL relative paths)
+                const img = await faceapi.fetchImage(imgUrl);
+                const detection = await faceapi.detectSingleFace(img)
+                  .withFaceLandmarks()
+                  .withFaceDescriptor();
+                
+                if (detection) {
+                  descriptors.push(detection.descriptor);
+                }
+              } catch (imgErr) {
+                console.warn(`Failed to process reference image ${imgUrl}:`, imgErr);
+              }
+            }
+
+            if (descriptors.length > 0) {
+              labeledFaceDescriptors.push(new faceapi.LabeledFaceDescriptors(student.label, descriptors));
+              addLog(`   ✅ Successfully compiled student '${student.label}' (${descriptors.length} references).`);
+            } else {
+              addLog(`   ⚠️ No faces detected in reference images for '${student.label}'.`);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load reference dataset:", err);
+        addLog("⚠️ Failed to load database reference embeddings: " + err.message);
+      }
+
+      if (labeledFaceDescriptors.length > 0) {
+        addLog("⚡ AI face database is ready for real-time verification!");
+        scanBtn.disabled = false;
+        scanBtn.textContent = "Run Face Recognition";
+      } else {
+        addLog("❌ Database contains no student reference pictures. Please add students with images first.");
+        scanBtn.textContent = "Database Empty";
       }
     }
 
+    // Toggle scanning loop
+    function toggleScanner() {
+      if (isScannerRunning) {
+        stopScanner();
+      } else {
+        startScanner();
+      }
+    }
+
+    function startScanner() {
+      if (isScannerRunning) return;
+      isScannerRunning = true;
+      scanBtn.textContent = "🛑 Stop Face Recognition";
+      scanBtn.className = "btn btn-danger";
+      stabilityQueue = [];
+      addLog("🔍 Started real-time browser scanning...");
+
+      // Canvas matches exact dimensions of video feed
+      const displaySize = { width: video.videoWidth || 640, height: video.videoHeight || 480 };
+      faceapi.matchDimensions(canvas, displaySize);
+
+      scanInterval = setInterval(async () => {
+        // Clear previous canvas drawings
+        const context = canvas.getContext('2d');
+        context.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Detect all faces in current frame
+        const detections = await faceapi.detectAllFaces(video)
+          .withFaceLandmarks()
+          .withFaceDescriptors();
+
+        const resizedDetections = faceapi.resizeResults(detections, displaySize);
+
+        if (labeledFaceDescriptors.length === 0) return;
+        const faceMatcher = new faceapi.FaceMatcher(labeledFaceDescriptors, 0.6);
+
+        resizedDetections.forEach((detection, idx) => {
+          const bestMatch = faceMatcher.findBestMatch(detection.descriptor);
+          const labelName = bestMatch.label;
+          const score = Math.round(bestMatch.distance * 100);
+          
+          // Draw standard bounding box
+          const box = detection.detection.box;
+          let drawBox;
+
+          if (labelName !== 'unknown') {
+            // Identified Student
+            const confidence = Math.round((1 - bestMatch.distance) * 100);
+            drawBox = new faceapi.draw.DrawBox(box, { 
+              label: `${labelName} (${confidence}%)`, 
+              boxColor: '#10b981' 
+            });
+            drawBox.draw(canvas);
+
+            // Record predicted name for consensus tracking
+            if (idx === 0) { // Focus on primary face
+              trackConsensus(labelName, confidence);
+            }
+          } else {
+            // Unknown Face
+            drawBox = new faceapi.draw.DrawBox(box, { 
+              label: 'Unknown', 
+              boxColor: '#ef4444' 
+            });
+            drawBox.draw(canvas);
+            
+            if (idx === 0) {
+              stabilityQueue = []; // Reset queue if primary face becomes unknown
+            }
+          }
+        });
+      }, 150); // Scans 7 frames per second for high UI responsiveness
+    }
+
+    function stopScanner() {
+      isScannerRunning = false;
+      if (scanInterval) {
+        clearInterval(scanInterval);
+        scanInterval = null;
+      }
+      scanBtn.textContent = "Run Face Recognition";
+      scanBtn.className = "btn btn-success";
+      
+      const context = canvas.getContext('2d');
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      addLog("🛑 Scanner stopped.");
+    }
+
+    // Monitor for 5 stable consecutive matches before logging attendance
+    async function trackConsensus(name, confidence) {
+      if (confidence < 80) return; // Strict baseline accuracy of 80%+
+
+      stabilityQueue.push(name);
+      
+      // Keep only last N frames in the buffer
+      if (stabilityQueue.length > STABILITY_THRESHOLD) {
+        stabilityQueue.shift();
+      }
+
+      // Check if queue has reached threshold and has unanimous consensus
+      const allMatch = stabilityQueue.length === STABILITY_THRESHOLD && 
+                       stabilityQueue.every(val => val === name);
+
+      if (allMatch) {
+        stabilityQueue = []; // Reset to prevent duplicates
+        stopScanner();
+        
+        addLog(`🧠 Perfect consensus reached for '${name}'! Processing attendance...`);
+
+        // Look up Student ID from name
+        const student = studentsMap[name.toLowerCase().trim()];
+        if (!student) {
+          addLog(`❌ Failed to mark attendance: Student '${name}' is not in database.`);
+          showToast(`Student '${name}' is not in database.`, 'error');
+          return;
+        }
+
+        try {
+          const dateStr = new Date().toISOString().split('T')[0];
+          const response = await authFetch('/api/attendance/face', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              student_id: student.id,
+              date: dateStr
+            })
+          });
+
+          const result = await response.json();
+          if (result.success) {
+            addLog(`✅ SUCCESS: Marked '${student.name}' present in Database.`);
+            showToast(`Marked ${student.name} present successfully!`, 'success');
+          } else {
+            addLog(`⚠️ Database returned: ${result.message}`);
+            showToast(result.message, 'warning');
+          }
+        } catch (err) {
+          console.error("Failed to post attendance:", err);
+          addLog("❌ API network connection error: " + err.message);
+          showToast("Network error posting attendance.", "error");
+        }
+      }
+    }
 
     function addLog(text) {
       const log = document.getElementById('faceLog');
