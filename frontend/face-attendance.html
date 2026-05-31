@@ -47,13 +47,14 @@
         <div class="form-card">
           <h3 id="modeTitle"> Face Attendance Scanner</h3>
           
-          <!-- Mode Selector for Localhost -->
-          <div id="modeSelectorContainer" style="display: none; margin-bottom: 20px; padding: 12px; background: var(--bg-hover); border-radius: 8px; border: 1px solid var(--border-color);">
+          <!-- Mode Selector (ALWAYS visible so user can trigger the python window from the cloud) -->
+          <div id="modeSelectorContainer" style="margin-bottom: 20px; padding: 16px; background: var(--bg-hover); border-radius: 8px; border: 1px solid var(--border-color);">
             <span style="font-size: 13px; font-weight: 600; display: block; margin-bottom: 8px; color: var(--text-secondary);">Select Scanning Mode:</span>
-            <div style="display: flex; gap: 10px;">
-              <button class="btn" id="selectBrowserBtn" onclick="setMode('browser')" style="flex: 1; padding: 8px; font-size: 13px;">🌐 Browser AI Scanner</button>
-              <button class="btn" id="selectPythonBtn" onclick="setMode('python')" style="flex: 1; padding: 8px; font-size: 13px;">🐍 Local Python OpenCV Window</button>
+            <div style="display: flex; gap: 10px; margin-bottom: 8px;">
+              <button class="btn" id="selectPythonBtn" onclick="setMode('python')" style="flex: 1; padding: 10px; font-size: 13px; font-weight: 600;">🐍 Local Python OpenCV Window (Desktop)</button>
+              <button class="btn" id="selectBrowserBtn" onclick="setMode('browser')" style="flex: 1; padding: 10px; font-size: 13px; font-weight: 600;">🌐 Browser-Native AI Scanner</button>
             </div>
+            <p id="modeGuideText" style="margin: 4px 0 0 0; font-size: 11px; color: var(--text-muted); line-height: 1.4;"></p>
           </div>
 
           <div class="face-container" style="display: flex; flex-direction: column; gap: 20px; align-items: center; justify-content: center; padding: 10px; width: 100%;">
@@ -85,8 +86,8 @@
         <div class="form-card" style="margin-top:20px">
           <h3> ℹ️ About Your Scanning Modes</h3>
           <div style="color:var(--text-secondary);font-size:14px;line-height:1.8">
-            <p>1. <strong>🌐 Browser AI Scanner (Works Cloud & Local)</strong>: Uses deep learning right in your browser. Perfect for cloud deployments like Render, and works instantly without local Python configuration.</p>
-            <p>2. <strong>🐍 Local Python OpenCV Window (Only works Locally)</strong>: Launches the traditional local python webcam GUI window directly on your computer desktop. Requires the Node server to be running on <code>localhost</code>.</p>
+            <p>1. <strong>🐍 Local Python OpenCV Window (Teacher Demos)</strong>: Spawns the physical OpenCV camera window directly on your computer's screen. <em>Note: Your local Node server must be active (npm run dev) on your computer for this button to trigger the camera!</em></p>
+            <p>2. <strong>🌐 Browser-Native AI Scanner (Works Everywhere)</strong>: Runs 100% in your internet browser. Ideal for testing directly inside Render on mobile phones or other devices without Python configuration.</p>
           </div>
         </div>
       </div>
@@ -118,7 +119,7 @@
 
     let localStream = null;
     let isScannerRunning = false;
-    let currentMode = 'browser'; // 'browser' or 'python'
+    let currentMode = 'python'; // Default to Python OpenCV scanner as requested by user
     let isLocalhost = false;
 
     // Browser-native specific variables
@@ -133,11 +134,9 @@
       detectEnvironment();
       await startBrowserWebcam();
       
-      if (currentMode === 'browser') {
-        await initializeFaceAPI();
-      } else {
-        setupPythonModeUI();
-      }
+      // Default to Python mode first as requested, but initialize Browser AI in background
+      setMode('python');
+      initializeFaceAPI(); // Lazy load AI weights in background
     });
 
     window.addEventListener('beforeunload', stopBrowserWebcam);
@@ -153,14 +152,11 @@
         badge.style.backgroundColor = "rgba(16, 185, 129, 0.15)";
         badge.style.color = "#10b981";
         badge.style.border = "1px solid rgba(16, 185, 129, 0.3)";
-        document.getElementById('modeSelectorContainer').style.display = 'block';
-        setMode('browser'); // Default to browser-native but allow toggle
       } else {
         badge.innerHTML = "☁️ Running in the Cloud (Render)";
         badge.style.backgroundColor = "rgba(59, 130, 246, 0.15)";
         badge.style.color = "#3b82f6";
         badge.style.border = "1px solid rgba(59, 130, 246, 0.3)";
-        setMode('browser');
       }
     }
 
@@ -170,21 +166,23 @@
       
       const browserBtn = document.getElementById('selectBrowserBtn');
       const pythonBtn = document.getElementById('selectPythonBtn');
+      const guideText = document.getElementById('modeGuideText');
       
-      if (isLocalhost) {
-        browserBtn.className = mode === 'browser' ? 'btn btn-success' : 'btn btn-secondary';
-        pythonBtn.className = mode === 'python' ? 'btn btn-success' : 'btn btn-secondary';
-      }
+      browserBtn.className = mode === 'browser' ? 'btn btn-success' : 'btn btn-secondary';
+      pythonBtn.className = mode === 'python' ? 'btn btn-success' : 'btn btn-secondary';
 
       if (mode === 'python') {
         document.getElementById('modeTitle').innerHTML = "🐍 Python OpenCV Desktop Scanner";
+        guideText.innerHTML = "💡 Spawns the physical OpenCV camera GUI window on your laptop screen. (Requires your local Node server running at <code>npm run dev</code>).";
         setupPythonModeUI();
       } else {
         document.getElementById('modeTitle').innerHTML = "🌐 Browser-Native AI Scanner";
+        guideText.innerHTML = "💡 Runs face-api.js inside the web browser. Works anywhere, including mobiles, without local Python files.";
         if (labeledFaceDescriptors.length > 0) {
           setupBrowserModeReadyUI();
         } else {
-          initializeFaceAPI();
+          scanBtn.disabled = true;
+          scanBtn.textContent = "Loading Browser AI Models...";
         }
       }
     }
@@ -192,8 +190,8 @@
     // Setup Python Mode UI config
     function setupPythonModeUI() {
       stopScanner();
-      addLog("💡 Python OpenCV Desktop Scanner selected.");
-      addLog("💡 Click 'Run Face Recognition' to spawn the local camera window on your desktop.");
+      addLog("💡 Python OpenCV Desktop Scanner mode active.");
+      addLog("💡 Make sure your local Node dev server is running in the background.");
       scanBtn.disabled = false;
       scanBtn.textContent = "Run OpenCV Face Recognition";
       scanBtn.className = "btn btn-success";
@@ -246,10 +244,7 @@
     async function initializeFaceAPI() {
       if (labeledFaceDescriptors.length > 0) return;
 
-      scanBtn.disabled = true;
-      scanBtn.textContent = "Initializing AI Models...";
-      
-      addLog("🚀 Initializing browser AI Face Recognition...");
+      addLog("🚀 Initializing browser AI Face Recognition in background...");
       addLog("📥 Loading models from CORS-friendly jsDelivr CDN...");
 
       // Use jsDelivr weights folder (allows CORS globally)
@@ -323,10 +318,11 @@
 
       if (labeledFaceDescriptors.length > 0) {
         addLog("⚡ Browser AI database compile complete!");
-        setupBrowserModeReadyUI();
+        if (currentMode === 'browser') {
+          setupBrowserModeReadyUI();
+        }
       } else {
         addLog("❌ Database contains no student reference pictures. Add students first.");
-        scanBtn.textContent = "Database Empty";
       }
     }
 
@@ -345,23 +341,24 @@
 
     // --- MODE 1: Python local OpenCV GUI window trigger ---
     async function triggerPythonScanner() {
-      if (!isLocalhost) {
-        showToast('Python OpenCV GUI scanner can only run on localhost!', 'error');
-        return;
-      }
-
       scanBtn.disabled = true;
       scanBtn.textContent = '🎥 Starting OpenCV camera...';
       scanBtn.className = 'btn btn-danger';
       
-      addLog('Releasing browser camera handle for Python engine...');
+      addLog('Releasing browser camera handle to allow Python direct access...');
       stopBrowserWebcam();
       
-      await new Promise(resolve => setTimeout(resolve, 500));
-      addLog('Executing Python face recognition script locally...');
+      await new Promise(resolve => setTimeout(resolve, 600));
+      addLog('Triggering Python OpenCV script locally on your desktop...');
       
       try {
-        const res = await authFetch('/api/attendance/start-face');
+        // ALWAYS route this request to localhost:3000 so it can trigger the physical python camera on your computer
+        const localApiUrl = 'http://localhost:3000/api/attendance/start-face';
+        const token = sessionStorage.getItem('token');
+        
+        const res = await fetch(localApiUrl, {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
         const data = await res.json();
         
         if (data.success) {
@@ -374,8 +371,9 @@
         }
       } catch (err) {
         console.error("Connection error:", err);
-        addLog('❌ Local API connection error: ' + err.message);
-        showToast('Local API connection error.', 'error');
+        addLog('❌ Local Connection Error: Could not connect to localhost:3000.');
+        addLog('💡 Make sure your local Node dev server is running on your computer! (Run "npm run dev")');
+        showToast('Could not connect to local Node server. Please make sure it is running in your terminal.', 'error');
       } finally {
         addLog('Re-acquiring browser camera preview...');
         await startBrowserWebcam();
